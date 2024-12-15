@@ -14,7 +14,9 @@ from mcp.types import (
     LoggingLevel
 )
 
+from .client import TickTickClient
 from .utils.auth import TickTickAuth, AuthConfig
+from .resources import TaskResources
 
 logger = logging.getLogger("ticktick-mcp")
 
@@ -28,6 +30,8 @@ class TickTickMCPServer:
             version="0.1.0"
         )
         self.auth = TickTickAuth(auth_config)
+        self.client = TickTickClient(self.auth)
+        self.task_resources = TaskResources(self.client)
         self._setup_handlers()
 
     def _setup_handlers(self):
@@ -36,23 +40,22 @@ class TickTickMCPServer:
         @self.server.list_resources()
         async def list_resources() -> list[Resource]:
             """List available TickTick resources."""
-            # TODO: Implement full resource listing
-            return [
-                Resource(
-                    uri="ticktick://tasks/inbox",
-                    name="Inbox Tasks",
-                    mimeType="application/json",
-                    description="Tasks in your TickTick inbox"
-                )
-            ]
+            try:
+                return await self.task_resources.list_resources()
+            except Exception as e:
+                logger.error(f"Error listing resources: {e}")
+                return []
 
         @self.server.read_resource()
         async def read_resource(uri: str) -> str:
             """Read a TickTick resource."""
-            # TODO: Implement resource reading
-            if uri == "ticktick://tasks/inbox":
-                return '{"tasks": []}'  # Placeholder
-            raise ValueError(f"Unknown resource: {uri}")
+            try:
+                return await self.task_resources.read_resource(uri)
+            except ValueError as e:
+                raise
+            except Exception as e:
+                logger.error(f"Error reading resource {uri}: {e}")
+                raise
 
         @self.server.list_tools()
         async def list_tools() -> list[Tool]:
@@ -70,11 +73,14 @@ class TickTickMCPServer:
         """Run the MCP server."""
         async with stdio_server() as streams:
             read_stream, write_stream = streams
-            await self.server.run(
-                read_stream,
-                write_stream,
-                self.server.create_initialization_options()
-            )
+            try:
+                await self.server.run(
+                    read_stream,
+                    write_stream,
+                    self.server.create_initialization_options()
+                )
+            finally:
+                await self.client.close()
 
 def main():
     """Entry point for the TickTick MCP server."""
