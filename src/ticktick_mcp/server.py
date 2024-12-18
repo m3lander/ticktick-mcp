@@ -9,11 +9,13 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
     Resource,
+    ResourceTemplate,
     Tool,
     TextContent,
     EmptyResult,
     LoggingLevel
 )
+from mcp.errors import McpError, ErrorCode
 
 from .client import TickTickClient
 from .utils.auth import TickTickAuth, AuthConfig
@@ -49,16 +51,43 @@ class TickTickMCPServer:
                 logger.error(f"Error listing resources: {e}")
                 return []
 
+        @self.server.list_resource_templates()
+        async def list_resource_templates() -> list[ResourceTemplate]:
+            """List available TickTick resource templates."""
+            try:
+                return await self.task_resources.list_resource_templates()
+            except Exception as e:
+                logger.error(f"Error listing resource templates: {e}")
+                return []
+
         @self.server.read_resource()
         async def read_resource(uri: str) -> str:
             """Read a TickTick resource."""
             try:
                 return await self.task_resources.read_resource(uri)
-            except ValueError as e:
+            except McpError:
                 raise
             except Exception as e:
                 logger.error(f"Error reading resource {uri}: {e}")
-                raise
+                raise McpError(ErrorCode.InternalError, f"Error reading resource: {str(e)}")
+
+        @self.server.subscribe_resource()
+        async def subscribe_resource(uri: str) -> None:
+            """Subscribe to a TickTick resource."""
+            try:
+                await self.task_resources.subscribe_resource(uri)
+            except Exception as e:
+                logger.error(f"Error subscribing to resource {uri}: {e}")
+                raise McpError(ErrorCode.InternalError, f"Error subscribing to resource: {str(e)}")
+
+        @self.server.unsubscribe_resource()
+        async def unsubscribe_resource(uri: str) -> None:
+            """Unsubscribe from a TickTick resource."""
+            try:
+                await self.task_resources.unsubscribe_resource(uri)
+            except Exception as e:
+                logger.error(f"Error unsubscribing from resource {uri}: {e}")
+                raise McpError(ErrorCode.InternalError, f"Error unsubscribing from resource: {str(e)}")
 
         @self.server.list_tools()
         async def list_tools() -> list[Tool]:
@@ -79,14 +108,21 @@ class TickTickMCPServer:
                     return await self.task_tools.delete_task(arguments)
                 elif name == "search_tasks":
                     return await self.task_tools.search_tasks(arguments)
+                elif name == "get_tags":
+                    return await self.task_tools.get_tags(arguments)
+                elif name == "create_tag":
+                    return await self.task_tools.create_tag(arguments)
+                elif name == "update_tag":
+                    return await self.task_tools.update_tag(arguments)
+                elif name == "delete_tag":
+                    return await self.task_tools.delete_tag(arguments)
                 else:
-                    raise ValueError(f"Unknown tool: {name}")
+                    raise McpError(ErrorCode.MethodNotFound, f"Unknown tool: {name}")
+            except McpError:
+                raise
             except Exception as e:
                 logger.error(f"Error executing tool {name}: {e}")
-                return [TextContent(
-                    type="text",
-                    text=f"Error executing tool: {str(e)}"
-                )]
+                raise McpError(ErrorCode.InternalError, f"Error executing tool: {str(e)}")
 
         @self.server.set_logging_level()
         async def set_logging_level(level: LoggingLevel) -> EmptyResult:

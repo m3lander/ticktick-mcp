@@ -22,7 +22,7 @@ cd ticktick-mcp
 poetry install
 
 # Or using pip
-pip install .
+pip install -r requirements.txt
 ```
 
 ## Configuration
@@ -53,55 +53,68 @@ TICKTICK_CLIENT_SECRET=your_client_secret
 # Using poetry
 poetry run ticktick-mcp
 
-# Or using the installed script
-ticktick-mcp
+# Or using Python directly
+python -m ticktick_mcp
 ```
-
-### Available Resources
-
-- `ticktick://tasks/all` - All tasks
-- `ticktick://tasks/inbox` - Inbox tasks
-- `ticktick://tasks/project/{id}` - Tasks in a specific project
-- `ticktick://tasks/search/{query}` - Search results
-
-### Available Tools
-
-- `create_task` - Create a new task
-- `update_task` - Update an existing task
-- `complete_task` - Mark a task as complete
-- `delete_task` - Delete a task
-- `search_tasks` - Search for tasks
 
 ## Development
 
+### Setting up the development environment
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/your-username/ticktick-mcp.git
+   cd ticktick-mcp
+   ```
+
+2. Install dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
+
+3. Set up pre-commit hooks:
+   ```
+   pip install pre-commit
+   pre-commit install
+   ```
+
+### Running tests
+
+To run the test suite:
+
 ```bash
-# Install development dependencies
-poetry install --with dev
-
-# Run tests
-poetry run pytest
-
-# Format code
-poetry run black .
-poetry run isort .
-
-# Type checking
-poetry run mypy .
+pytest
 ```
 
-## Troubleshooting
+### Code Style
 
-### Authentication Issues
+We use Black for code formatting. To check your code style:
 
-If you encounter authentication issues:
-1. Delete the token file at `~/.ticktick/token.json`
-2. Restart the server
-3. Follow the OAuth2 authorization flow again
+```bash
+black --check .
+```
 
-### Logging
+To automatically format your code:
 
-The server logs to stderr with detailed information about operations and errors. Set the log level using the `LOG_LEVEL` environment variable or through the MCP protocol.
+```bash
+black .
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## License
 
-MIT
+Distributed under the MIT License. See `LICENSE` for more information.
+
+## Acknowledgements
+
+- [Model Context Protocol](https://modelcontextprotocol.io/)
+- [TickTick API](https://developer.ticktick.com/)

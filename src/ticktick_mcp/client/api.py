@@ -2,10 +2,11 @@
 
 import logging
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import httpx
 from pydantic import BaseModel
+from cachetools import TTLCache, cached
 
 from ..utils.auth import TickTickAuth, AuthConfig
 
@@ -29,10 +30,18 @@ class Project(BaseModel):
     name: str
     color: Optional[str] = None
 
+class Tag(BaseModel):
+    """TickTick tag model."""
+    name: str
+    label: Optional[str] = None
+    color: Optional[str] = None
+
 class TickTickClient:
     """Client for interacting with TickTick API."""
 
     BASE_URL = "https://api.ticktick.com/api/v2"
+    CACHE_TTL = 300  # 5 minutes
+    CACHE_MAXSIZE = 100
 
     def __init__(self, auth: Optional[TickTickAuth] = None):
         """Initialize the TickTick API client."""
@@ -41,6 +50,7 @@ class TickTickClient:
             base_url=self.BASE_URL,
             timeout=30.0
         )
+        self._cache = TTLCache(maxsize=self.CACHE_MAXSIZE, ttl=self.CACHE_TTL)
         
     async def _get_headers(self) -> Dict[str, str]:
         """Get headers with authentication."""
@@ -50,6 +60,7 @@ class TickTickClient:
             "Content-Type": "application/json"
         }
 
+    @cached(cache=TTLCache(maxsize=CACHE_MAXSIZE, ttl=CACHE_TTL))
     async def get_tasks(self, list_id: Optional[str] = None) -> List[Task]:
         """Get tasks, optionally filtered by list ID."""
         headers = await self._get_headers()
@@ -87,6 +98,7 @@ class TickTickClient:
             json=task.dict(exclude_none=True)
         )
         response.raise_for_status()
+        self._cache.clear()  # Invalidate cache after creating a task
         return Task(**response.json())
 
     async def update_task(self, task: Task) -> Task:
@@ -98,6 +110,7 @@ class TickTickClient:
             json=task.dict(exclude_none=True)
         )
         response.raise_for_status()
+        self._cache.clear()  # Invalidate cache after updating a task
         return Task(**response.json())
 
     async def delete_task(self, task_id: str) -> None:
@@ -108,7 +121,20 @@ class TickTickClient:
             headers=headers
         )
         response.raise_for_status()
+        self._cache.clear()  # Invalidate cache after deleting a task
 
+    async def complete_task(self, task_id: str) -> Task:
+        """Mark a task as completed."""
+        headers = await self._get_headers()
+        response = await self._client.post(
+            f"/task/{task_id}/complete",
+            headers=headers
+        )
+        response.raise_for_status()
+        self._cache.clear()  # Invalidate cache after completing a task
+        return Task(**response.json())
+
+    @cached(cache=TTLCache(maxsize=CACHE_MAXSIZE, ttl=CACHE_TTL))
     async def get_projects(self) -> List[Project]:
         """Get all projects/lists."""
         headers = await self._get_headers()
@@ -129,6 +155,51 @@ class TickTickClient:
         )
         response.raise_for_status()
         return [Task(**task) for task in response.json()]
+
+    @cached(cache=TTLCache(maxsize=CACHE_MAXSIZE, ttl=CACHE_TTL))
+    async def get_tags(self) -> List[Tag]:
+        """Get all tags."""
+        headers = await self._get_headers()
+        response = await self._client.get(
+            "/tags",
+            headers=headers
+        )
+        response.raise_for_status()
+        return [Tag(**tag) for tag in response.json()]
+
+    async def create_tag(self, tag: Tag) -> Tag:
+        """Create a new tag."""
+        headers = await self._get_headers()
+        response = await self._client.post(
+            "/tag",
+            headers=headers,
+            json=tag.dict(exclude_none=True)
+        )
+        response.raise_for_status()
+        self._cache.clear()  # Invalidate cache after creating a tag
+        return Tag(**response.json())
+
+    async def update_tag(self, tag: Tag) -> Tag:
+        """Update an existing tag."""
+        headers = await self._get_headers()
+        response = await self._client.put(
+            f"/tag/{tag.name}",
+            headers=headers,
+            json=tag.dict(exclude_none=True)
+        )
+        response.raise_for_status()
+        self._cache.clear()  # Invalidate cache after updating a tag
+        return Tag(**response.json())
+
+    async def delete_tag(self, tag_name: str) -> None:
+        """Delete a tag."""
+        headers = await self._get_headers()
+        response = await self._client.delete(
+            f"/tag/{tag_name}",
+            headers=headers
+        )
+        response.raise_for_status()
+        self._cache.clear()  # Invalidate cache after deleting a tag
 
     async def close(self):
         """Close the HTTP client."""
